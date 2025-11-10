@@ -1,0 +1,233 @@
+'use client'
+
+import React, { useEffect, useRef, useState } from 'react'
+import axios from 'axios'
+import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+import { BlockType } from '../../components/type2'
+import * as jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
+import { GroupBlock } from '../../components/GroupBlock'
+import { Info } from '../../components/function'
+
+export default function EditBlock() {
+  const searchParams = useSearchParams()
+  const id = searchParams.get('id')
+  const [block, setBlock] = useState<BlockType | null>(null)
+  const formRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const fetchBlock = async () => {
+      if (!id) return
+      try {
+        const res = await axios.get(`/api/gala/${id}`)
+        setBlock(res.data as BlockType)
+      } catch (error) {
+        console.error('Failed to fetch block', error)
+      }
+    }
+    fetchBlock()
+  }, [id])
+
+  const handleDownloadPDF = async () => {
+    if (!formRef.current || !block) return
+
+    try {
+      const pdf = new jsPDF.jsPDF('p', 'mm', 'a4')
+      const pageWidth = 210
+
+      const tempContainer = document.createElement('div')
+      tempContainer.style.position = 'absolute'
+      tempContainer.style.top = '-9999px'
+      tempContainer.style.left = '-9999px'
+      tempContainer.style.width = '1200px'
+      document.body.appendChild(tempContainer)
+
+      const summaryClone = formRef.current
+        .querySelector('.pdf-summary')
+        ?.cloneNode(true) as HTMLElement
+      if (!summaryClone) return
+
+      tempContainer.innerHTML = ''
+      tempContainer.appendChild(summaryClone)
+
+      const elements = tempContainer.querySelectorAll('*') as NodeListOf<HTMLElement>
+      elements.forEach((el) => {
+        el.style.color = 'black'
+        el.style.backgroundColor = 'white'
+        el.style.fontFamily = 'Arial, sans-serif'
+      })
+
+      const canvas = await html2canvas(tempContainer, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+      })
+
+      const imgData = canvas.toDataURL('image/jpeg', 1.0)
+      const imgWidth = pageWidth
+      const imgHeight = (canvas.height * pageWidth) / canvas.width
+
+      const pageHeight = 297 // A4 height in mm
+      let heightLeft = imgHeight
+      let position = 0
+
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight)
+      heightLeft -= pageHeight
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight
+        pdf.addPage()
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight)
+        heightLeft -= pageHeight
+      }
+
+      document.body.removeChild(tempContainer)
+
+      const currentDate = new Date()
+        .toLocaleDateString('en-IN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        })
+        .replace(/\//g, '-')
+      const filename = `Gala-${block.BlockType || 'Report'}-${currentDate}.pdf`
+      pdf.save(filename)
+    } catch (err) {
+      console.error('Error generating PDF', err)
+    }
+  }
+
+  if (!block) {
+    return <div className="flex justify-center items-center h-screen text-gray-600">Loading...</div>
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto bg-white py-2 px-4 text-black overflow-auto">
+      <div
+        className="scale-container"
+        style={{
+          transform: 'scale(1)',
+          transformOrigin: 'top left',
+          width: '1200px',
+        }}
+      >
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Block PDF</h1>
+          <Link href="/block/todi(raskat)" className="text-blue-600 hover:underline">
+            ← Back
+          </Link>
+        </div>
+
+        <div ref={formRef}>
+          {/* PAGE 1: Summary + Groups */}
+          <div
+            className="pdf-page bg-white p-6 mb-6 border border-gray-200 pdf-summary"
+            style={{ width: '1200px' }}
+          >
+            {/* Summary Metrics */}
+            <div className="mb-8 p-4 border border-gray-200 rounded-lg">
+              <h2 className="text-lg font-semibold mb-4">Summary Metrics</h2>
+              <div className="grid grid-cols-3 gap-4">
+                {/* Total Block Area */}
+                <div className="border p-3 rounded">
+                  <p className="text-sm text-gray-500">Total Delivered Block Area (m³)</p>
+                  <p className="text-xl font-bold">{Number(block.total_block_area || 0).toFixed(2)}</p>
+                </div>
+
+                {/* Total Block Cost */}
+                <div className="border p-3 rounded">
+                  <p className="text-sm text-gray-500">Total Delivered Block Cost (₹)</p>
+                  <p className="text-xl font-bold">
+                    ₹
+                    {Number(block.total_block_cost || 0).toLocaleString('en-IN', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </p>
+                </div>
+
+                {/* Final Cost */}
+                <div className="border p-3 rounded">
+                  <p className="text-sm text-gray-500">Final Cost (₹)</p>
+                  <p className="text-xl font-bold">
+                    ₹
+                    {Number(block.final_cost || 0).toLocaleString('en-IN', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <section className="grid grid-cols-6 gap-4 mb-6">
+              <Info label="Block Type" value={block.GalaType} />
+              <Info
+                label="Vendor"
+                value={
+                  typeof block.vender_id === 'object' ? block.vender_id.vendor : block.vender_id
+                }
+              />
+              <Info label="Munim" value={block.munim} />
+              <Info label="Date" value={`${new Date(block.date).getDate().toString().padStart(2, "0")}/${(new Date(block.date).getMonth() + 1).toString().padStart(2, "0")}/${new Date(block.date).getFullYear()}`}/>
+              <Info label="Hydra Cost" value={block.hydra_cost} />
+              <Info label="Truck Cost" value={block.truck_cost} />
+              <Info label="Length (m)" value={block.l} />
+              <Info label="Breadth (m)" value={block.total_b} />
+              <Info label="Height (m)" value={block.h} />
+              <Info label="Total Groups" value={block.group.length} />
+              <Info label="Total Measures" value={block.group.reduce((total, group) => total + group.block.reduce((bT, b) => bT + b.addmeasures.length, 0), 0)} />
+              <Info label="Total Blocks" value={block.group.reduce((total, group) => total + group.block.length, 0)} />
+              <Info label="Total Todi Cost (₹)" value={Number(block.total_gala_cost).toLocaleString('en-IN')}
+              />
+              <Info label="Total Todi Area (m³)" value={Number(block.total_gala_area).toLocaleString('en-IN')}
+              />
+              <Info label="Estimate Cost (₹)" value={Number(block.estimate_cost).toLocaleString('en-IN')}
+              />
+              <Info label="Depreciation" value={block.depreciation}
+              />
+              <Info label="Final Cost (₹)" value={Number(block.final_cost).toLocaleString('en-IN')}
+              />
+              <Info
+                label="Total Blocks"
+                value={block.group.reduce((total, group) => total + group.block.length, 0)}
+              />
+              <Info
+                label="Total Todi Cost (₹)"
+                value={Number(block.total_gala_cost).toLocaleString('en-IN')}
+              />
+              <Info
+                label="Total Todi Area (m³)"
+                value={Number(block.total_gala_area).toLocaleString('en-IN')}
+              />
+              <Info
+                label="Estimate Cost (₹)"
+                value={Number(block.estimate_cost).toLocaleString('en-IN')}
+              />
+              <Info label="Depreciation" value={block.depreciation} />
+              <Info
+                label="Final Cost (₹)"
+                value={Number(block.final_cost).toLocaleString('en-IN')}
+              />
+            </section>
+
+            {/* Render all groups */}
+            {block.group.map((group, index) => (
+              <GroupBlock group={group} groupIndex={index} key={index} />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <button
+          onClick={handleDownloadPDF}
+          className="bg-indigo-600 text-white px-6 py-2 rounded hover:bg-indigo-700"
+        >
+          Download PDF
+        </button>
+      </div>
+    </div>
+  )
+}

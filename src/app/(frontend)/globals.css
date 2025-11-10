@@ -1,0 +1,69 @@
+/*@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');*/
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Add this to your global CSS (e.g. styles/globals.css) */
+#nprogress {
+  pointer-events: none;
+}
+
+#nprogress .bar {
+  background: red; 
+  position: fixed;
+  z-index: 9999;
+  top: 0;
+  left: 0;
+
+  width: 100%;
+  height: 3px;
+}
+
+
+
+/* globals.css or inside <style jsx global> block if using module */
+@media (max-width: 768px) {
+  .scale-container {
+    transform: scale(0.33);
+    transform-origin: top left;
+  }
+}
+
+@media (max-width: 480px) {
+  .scale-container {
+    transform: scale(0.25);
+    transform-origin: top left;
+  }
+}
+
+
+@layer base {
+  :root {
+    --foreground-rgb: 0, 0, 0;
+    --background-rgb: 255, 255, 255;
+  }
+  .dark {
+    --foreground-rgb: 255, 255, 255;
+    --background-rgb: 0, 0, 0;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-gray-200 dark:border-gray-800;
+  }
+  body {
+    @apply bg-white text-black dark:bg-black dark:text-white;
+  }
+}
+
+@keyframes loading {
+  0% { width: 0; }
+  100% { width: 100%; }
+}
+
+.loading-bar {
+  @apply fixed top-0 left-0 right-0 h-1 bg-red-500 dark:bg-red-400 z-50;
+  animation: loading 2s ease-in-out infinite;
+}
